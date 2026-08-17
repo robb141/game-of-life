@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conway's Game of Life</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Conway's Game of Life</h1>
+        <p class="subtitle">Java / Spring Boot backend &middot; the browser just draws pixels</p>
+    </header>
+
+    <main>
+        <canvas id="grid" width="600" height="600"></canvas>
+
+        <section class="controls">
+            <div class="control-row">
+                <button id="playPause">&#9654; Play</button>
+                <button id="step">Step</button>
+                <button id="clear">Clear</button>
+                <button id="random">Random</button>
+            </div>
+
+            <div class="control-row">
+                <label for="pattern">Pattern</label>
+                <select id="pattern"></select>
+                <button id="loadPattern">Load</button>
+            </div>
+
+            <div class="control-row">
+                <label for="speed">Speed</label>
+                <input type="range" id="speed" min="1" max="30" value="10">
+                <span id="speedLabel">10 gen/s</span>
+            </div>
+
+            <div class="control-row stats">
+                <span>Generation: <strong id="generation">0</strong></span>
+                <span>Live cells: <strong id="liveCount">0</strong></span>
+            </div>
+
+            <p class="hint">Click any cell in the grid to toggle it, even while paused.</p>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>

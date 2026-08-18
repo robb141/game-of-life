@@ -137,13 +137,78 @@ API with `MockMvc`.
 
 To cut a versioned release: `git tag v1.0.0 && git push origin v1.0.0`.
 
-### Taking it further
+3. **`deploy`** - runs only on pushes to `main` (never on tags or PRs):
+   builds the same `Dockerfile`, pushes it to **Google Artifact
+   Registry**, and deploys it to **Cloud Run** with
+   `--allow-unauthenticated`, so the resulting URL is publicly
+   reachable. Authenticates via Workload Identity Federation - GitHub
+   mints a short-lived OIDC token for the run, which Google exchanges
+   for credentials scoped to one service account. No long-lived JSON
+   key is stored anywhere. See "Deploying to Cloud Run" below for the
+   one-time GCP setup this requires.
 
-This publishes an image but doesn't push it anywhere that serves
-traffic. To actually deploy on every merge, add a step (or job) after
-`publish` that deploys the freshly-pushed image - e.g. `flyctl deploy`,
-an SSH + `docker pull && docker compose up -d` on a VM, or a `kubectl
-set image` against a cluster. That step needs real deployment
-credentials, so it belongs behind a repository/environment secret and
-ideally a manual approval gate (a GitHub Environment with required
-reviewers) rather than running unattended on every push.
+### Deploying to Cloud Run
+
+The `deploy` job needs three repository secrets and a one-time GCP
+setup (a project, an Artifact Registry repo, a service account, and a
+Workload Identity Federation provider trusting this specific repo).
+Run once, from a machine with `gcloud` installed and logged in
+(`gcloud auth login`), or from Cloud Shell in the GCP Console:
+
+```bash
+PROJECT_ID="your-gcp-project-id"     # existing project, billing enabled
+REPO="owner/game-of-life"            # this GitHub repo, owner/name
+REGION="us-central1"
+
+gcloud config set project "$PROJECT_ID"
+gcloud services enable run.googleapis.com artifactregistry.googleapis.com \
+  iamcredentials.googleapis.com
+
+# Where built images live
+gcloud artifacts repositories create game-of-life \
+  --repository-format=docker --location="$REGION"
+
+# The identity GitHub Actions deploys as
+gcloud iam service-accounts create gha-deployer \
+  --display-name="GitHub Actions Deployer"
+SA="gha-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
+
+for role in roles/artifactregistry.writer roles/run.admin roles/iam.serviceAccountUser; do
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${SA}" --role="$role"
+done
+
+# Trust GitHub's OIDC tokens, but only for this repo
+gcloud iam workload-identity-pools create github-pool --location=global
+gcloud iam workload-identity-pools providers create-oidc github-provider \
+  --location=global --workload-identity-pool=github-pool \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --attribute-condition="assertion.repository=='${REPO}'"
+
+PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
+gcloud iam service-accounts add-iam-policy-binding "$SA" \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-pool/attribute.repository/${REPO}"
+
+echo "GCP_PROJECT_ID=${PROJECT_ID}"
+echo "GCP_SERVICE_ACCOUNT=${SA}"
+echo "GCP_WORKLOAD_IDENTITY_PROVIDER=projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
+```
+
+Then set those three values as repository secrets (Settings -> Secrets
+and variables -> Actions), or via the CLI:
+
+```bash
+gh secret set GCP_PROJECT_ID --body "your-gcp-project-id"
+gh secret set GCP_SERVICE_ACCOUNT --body "gha-deployer@your-gcp-project-id.iam.gserviceaccount.com"
+gh secret set GCP_WORKLOAD_IDENTITY_PROVIDER --body "projects/.../providers/github-provider"
+```
+
+Push to `main` and the `deploy` job will build, push, and deploy; the
+service URL shows up as the environment URL on the run's summary page
+(and via `gcloud run services describe game-of-life --region us-central1 --format='value(status.url)'`).
+
+Cloud Run's free tier covers a low-traffic hobby app like this
+(scales to zero when idle, so the first request after a quiet period
+has a brief cold start).

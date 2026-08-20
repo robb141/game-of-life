@@ -7,6 +7,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -57,5 +60,53 @@ class BoardControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cells.length()").value(3))
                 .andExpect(jsonPath("$.generation").value(1));
+    }
+
+    @Test
+    void generationsAtLimitSucceeds() throws Exception {
+        String requestBody = """
+                {"cells": [{"x":0,"y":0},{"x":1,"y":0},{"x":2,"y":0}], "generations": 200}
+                """;
+
+        mockMvc.perform(post("/api/step")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.generation").value(200));
+    }
+
+    @Test
+    void generationsOverLimitReturnsBadRequest() throws Exception {
+        String requestBody = """
+                {"cells": [{"x":0,"y":0},{"x":1,"y":0},{"x":2,"y":0}], "generations": 201}
+                """;
+
+        mockMvc.perform(post("/api/step")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void cellCountAtLimitSucceeds() throws Exception {
+        mockMvc.perform(post("/api/step")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cellsRequestBody(20_000, 1)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void cellCountOverLimitReturnsBadRequest() throws Exception {
+        mockMvc.perform(post("/api/step")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cellsRequestBody(20_001, 1)))
+                .andExpect(status().isBadRequest());
+    }
+
+    private static String cellsRequestBody(int cellCount, int generations) {
+        String cells = IntStream.range(0, cellCount)
+                .mapToObj(i -> "{\"x\":" + i + ",\"y\":0}")
+                .collect(Collectors.joining(","));
+        return "{\"cells\": [" + cells + "], \"generations\": " + generations + "}";
     }
 }

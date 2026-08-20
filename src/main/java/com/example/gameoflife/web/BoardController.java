@@ -68,13 +68,26 @@ public class BoardController {
         return toResponse(cells, 0);
     }
 
+    private static final int MAX_GENERATIONS = 200;
+    private static final int MAX_CELLS = 20_000;
+
     @PostMapping("/step")
     public BoardResponse step(@RequestBody StepRequest request) {
+        if (request.cells().size() > MAX_CELLS) {
+            throw new IllegalArgumentException(
+                    "Too many live cells: received " + request.cells().size() + ", limit is " + MAX_CELLS + ".");
+        }
+
+        int generations = request.generations() == null ? 1 : Math.max(1, request.generations());
+        if (generations > MAX_GENERATIONS) {
+            throw new IllegalArgumentException(
+                    "Too many generations: requested " + generations + ", limit is " + MAX_GENERATIONS + ".");
+        }
+
         Set<Cell> current = request.cells().stream()
                 .map(CellDto::toCell)
                 .collect(Collectors.toUnmodifiableSet());
 
-        int generations = request.generations() == null ? 1 : Math.max(1, request.generations());
         Set<Cell> next = LifeEngine.advance(current, generations);
 
         return toResponse(next, generations);

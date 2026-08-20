@@ -174,7 +174,7 @@ Run once, from a machine with `gcloud` installed and logged in
 ```bash
 PROJECT_ID="your-gcp-project-id"     # existing project, billing enabled
 REPO="owner/game-of-life"            # this GitHub repo, owner/name
-REGION="us-central1"
+REGION="europe-west10"
 
 gcloud config set project "$PROJECT_ID"
 gcloud services enable run.googleapis.com artifactregistry.googleapis.com \
@@ -223,7 +223,7 @@ gh secret set GCP_WORKLOAD_IDENTITY_PROVIDER --body "projects/.../providers/gith
 
 Push to `main` and the `deploy` job will build, push, and deploy; the
 service URL shows up as the environment URL on the run's summary page
-(and via `gcloud run services describe game-of-life --region us-central1 --format='value(status.url)'`).
+(and via `gcloud run services describe game-of-life --region europe-west10 --format='value(status.url)'`).
 
 Cloud Run's free tier covers a low-traffic hobby app like this
 (scales to zero when idle, so the first request after a quiet period

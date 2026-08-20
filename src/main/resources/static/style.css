@@ -50,12 +50,43 @@ main {
     align-items: flex-start;
 }
 
+.canvas-wrap {
+    position: relative;
+    line-height: 0;
+}
+
 canvas {
     background: var(--grid-bg);
     border: 1px solid var(--border);
     border-radius: 8px;
-    cursor: pointer;
+    cursor: crosshair;
     image-rendering: pixelated;
+}
+
+canvas.panning {
+    cursor: grabbing;
+}
+
+.zoom-controls {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    display: flex;
+    gap: 4px;
+}
+
+.zoom-controls button {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    font-size: 1rem;
+    line-height: 1;
+    border-radius: 5px;
+    opacity: 0.85;
+}
+
+.zoom-controls button:hover {
+    opacity: 1;
 }
 
 .controls {

@@ -84,6 +84,15 @@ POSTs them to `/api/step` and redraws the response. All the actual Game
 of Life logic lives in the Java backend - the browser is a thin
 renderer.
 
+## Health check
+
+Spring Boot Actuator is wired in with only the health endpoint exposed
+(`management.endpoints.web.exposure.include=health` in
+`application.properties`), so the deployed service has a real
+`/actuator/health` returning `{"status":"UP"}` - useful for uptime
+checks or a future Cloud Run health probe, rather than relying on the
+static `index.html` as a proxy for "is the app actually up."
+
 ## Project layout
 
 ```
@@ -118,12 +127,17 @@ API with `MockMvc`.
 
 ## CI/CD
 
-`.github/workflows/ci-cd.yml` has two jobs:
+`.github/workflows/ci-cd.yml` has four jobs:
 
 1. **`test`** - runs on every push and pull request: sets up JDK 21,
    runs `mvn verify`, uploads the surefire test report as a build
    artifact. This is the gate: nothing publishes if this fails.
-2. **`publish`** - runs only on pushes to `main` or version tags
+2. **`e2e`** - builds the real Docker image, runs it, and drives it with
+   a Playwright browser test (`e2e/`) that loads the page and clicks
+   Play. It's informational only: `publish` and `deploy` depend on
+   `test`, not on `e2e`, so a flaky browser test can never block a real
+   deploy.
+3. **`publish`** - runs only on pushes to `main` or version tags
    (`v1.2.3`), never on pull requests (so a fork can't push images
    using your repo's credentials). It builds the `Dockerfile` with
    Buildx and pushes the image to the **GitHub Container Registry**
@@ -139,7 +153,7 @@ API with `MockMvc`.
 
 To cut a versioned release: `git tag v1.0.0 && git push origin v1.0.0`.
 
-3. **`deploy`** - runs only on pushes to `main` (never on tags or PRs):
+4. **`deploy`** - runs only on pushes to `main` (never on tags or PRs):
    builds the same `Dockerfile`, pushes it to **Google Artifact
    Registry**, and deploys it to **Cloud Run** with
    `--allow-unauthenticated`, so the resulting URL is publicly

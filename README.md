@@ -1,5 +1,7 @@
 # Conway's Game of Life
 
+**Live app:** https://game-of-life-leulruwtrq-oe.a.run.app
+
 A tiny Spring Boot app that plays [Conway's Game of Life](https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life)
 on an unbounded grid, with a canvas-based browser frontend. Built to be a
 compact tour of modern Java (records, streams, `switch`-free enums with

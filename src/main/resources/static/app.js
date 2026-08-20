@@ -87,13 +87,21 @@ async function loadRandom() {
     render();
 }
 
-async function step() {
+// Above this many requests/sec, batch multiple generations into each
+// POST /api/step instead of firing one request per generation - keeps
+// network volume bounded at high speed settings while still advancing
+// the board at the user's selected overall rate. Backend caps
+// `generations` per request at 200; this stays far under that.
+const MAX_TICK_HZ = 10;
+const MAX_BATCH_GENERATIONS = 25;
+
+async function step(generations = 1) {
     const body = {
         cells: [...state.cells].map(k => {
             const [x, y] = k.split(",").map(Number);
             return { x, y };
         }),
-        generations: 1,
+        generations,
     };
     const res = await fetch("/api/step", {
         method: "POST",
@@ -102,7 +110,7 @@ async function step() {
     });
     const board = await res.json();
     setCells(board.cells);
-    state.generation += 1;
+    state.generation += generations;
     render();
 }
 
@@ -117,8 +125,15 @@ function play() {
     if (state.playing) return;
     state.playing = true;
     els.playPause.textContent = "⏸ Pause";
-    const intervalMs = 1000 / Number(els.speed.value);
-    state.timer = setInterval(step, intervalMs);
+
+    const speed = Number(els.speed.value); // desired generations/sec
+    const generationsPerTick = Math.min(
+        MAX_BATCH_GENERATIONS,
+        Math.max(1, Math.ceil(speed / MAX_TICK_HZ))
+    );
+    const intervalMs = (1000 * generationsPerTick) / speed;
+
+    state.timer = setInterval(() => step(generationsPerTick), intervalMs);
 }
 
 function pause() {

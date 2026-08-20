@@ -196,4 +196,7 @@ jobs:
           service: ${{ env.SERVICE }}
           region: ${{ env.REGION }}
           image: ${{ env.IMAGE }}
-          flags: --allow-unauthenticated --port=8080
+          # max-instances hard-caps worst-case spend: this app has no real
+          # concurrent traffic, so trading "returns 429 during a spike" for
+          # "can never scale past a small, bounded bill" is the right call.
+          flags: --allow-unauthenticated --port=8080 --max-instances=3

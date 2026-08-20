@@ -13,7 +13,14 @@
     </header>
 
     <main>
-        <canvas id="grid" width="600" height="600"></canvas>
+        <div class="canvas-wrap">
+            <canvas id="grid" width="600" height="600"></canvas>
+            <div class="zoom-controls">
+                <button id="zoomOut" title="Zoom out">&minus;</button>
+                <button id="zoomReset" title="Reset view">&#9678;</button>
+                <button id="zoomIn" title="Zoom in">+</button>
+            </div>
+        </div>
 
         <section class="controls">
             <div class="control-row">
@@ -40,7 +47,7 @@
                 <span>Live cells: <strong id="liveCount">0</strong></span>
             </div>
 
-            <p class="hint">Click any cell in the grid to toggle it, even while paused.</p>
+            <p class="hint">Click to toggle a cell, drag to paint several. Right-click drag to pan, scroll or use +/&minus; to zoom. Space plays/pauses, &rarr; steps once.</p>
         </section>
     </main>
 

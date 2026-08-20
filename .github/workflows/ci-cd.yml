@@ -6,6 +6,7 @@ on:
     tags: ["v*.*.*"]
   pull_request:
     branches: [main]
+  workflow_dispatch: {}
 
 # Cancel superseded runs on the same branch/PR so we don't waste minutes
 # building a commit nobody cares about anymore.
@@ -48,8 +49,9 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     # Only publish from main and version tags - never from pull requests,
-    # which may come from untrusted forks.
-    if: github.event_name == 'push'
+    # which may come from untrusted forks. workflow_dispatch is safe to
+    # include: only people with write access to this repo can trigger it.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       packages: write
@@ -92,7 +94,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     # Only ever deploy from main - a tag push or a PR should never hit prod.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     environment:
       name: production
       url: ${{ steps.deploy.outputs.url }}

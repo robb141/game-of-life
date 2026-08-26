@@ -48,8 +48,8 @@ jobs:
     name: End-to-end smoke test
     needs: test
     runs-on: ubuntu-latest
-    # Informational only: publish/deploy below only depend on `test`, not
-    # on this job, so a flaky browser test can never block a real deploy.
+    # Informational only: publish below only depends on `test`, not on
+    # this job, so a flaky browser test can never block a real publish.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -147,56 +147,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  deploy:
-    name: Deploy to Cloud Run
-    needs: test
-    runs-on: ubuntu-latest
-    # Only ever deploy from main - a tag push or a PR should never hit prod.
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-    environment:
-      name: production
-      url: ${{ steps.deploy.outputs.url }}
-    env:
-      REGION: europe-west10
-      SERVICE: game-of-life
-      AR_REPO: game-of-life
-    permissions:
-      contents: read
-      id-token: write # required to mint the OIDC token Google exchanges for credentials
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Authenticate to Google Cloud
-        id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
-      - name: Set up gcloud
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
-
-      - name: Build and push to Artifact Registry
-        run: |
-          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.SERVICE }}:${{ github.sha }}"
-          docker build -t "$IMAGE" .
-          docker push "$IMAGE"
-          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
-
-      - name: Deploy to Cloud Run
-        id: deploy
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: ${{ env.SERVICE }}
-          region: ${{ env.REGION }}
-          image: ${{ env.IMAGE }}
-          # max-instances hard-caps worst-case spend: this app has no real
-          # concurrent traffic, so trading "returns 429 during a spike" for
-          # "can never scale past a small, bounded bill" is the right call.
-          flags: --allow-unauthenticated --port=8080 --max-instances=3

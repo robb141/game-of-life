@@ -1,7 +1,5 @@
 # Conway's Game of Life
 
-**Live app:** https://game-of-life-leulruwtrq-oe.a.run.app
-
 A tiny Spring Boot app that plays [Conway's Game of Life](https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life)
 on an unbounded grid, with a canvas-based browser frontend. Built to be a
 compact tour of modern Java (records, streams, `switch`-free enums with
@@ -90,8 +88,8 @@ Spring Boot Actuator is wired in with only the health endpoint exposed
 (`management.endpoints.web.exposure.include=health` in
 `application.properties`), so the deployed service has a real
 `/actuator/health` returning `{"status":"UP"}` - useful for uptime
-checks or a future Cloud Run health probe, rather than relying on the
-static `index.html` as a proxy for "is the app actually up."
+checks or a future deployment's health probe, rather than relying on
+the static `index.html` as a proxy for "is the app actually up."
 
 ## Project layout
 
@@ -127,16 +125,15 @@ API with `MockMvc`.
 
 ## CI/CD
 
-`.github/workflows/ci-cd.yml` has four jobs:
+`.github/workflows/ci-cd.yml` has three jobs:
 
 1. **`test`** - runs on every push and pull request: sets up JDK 21,
    runs `mvn verify`, uploads the surefire test report as a build
    artifact. This is the gate: nothing publishes if this fails.
 2. **`e2e`** - builds the real Docker image, runs it, and drives it with
    a Playwright browser test (`e2e/`) that loads the page and clicks
-   Play. It's informational only: `publish` and `deploy` depend on
-   `test`, not on `e2e`, so a flaky browser test can never block a real
-   deploy.
+   Play. It's informational only: `publish` depends on `test`, not on
+   `e2e`, so a flaky browser test can never block a real publish.
 3. **`publish`** - runs only on pushes to `main` or version tags
    (`v1.2.3`), never on pull requests (so a fork can't push images
    using your repo's credentials). It builds the `Dockerfile` with
@@ -153,78 +150,7 @@ API with `MockMvc`.
 
 To cut a versioned release: `git tag v1.0.0 && git push origin v1.0.0`.
 
-4. **`deploy`** - runs only on pushes to `main` (never on tags or PRs):
-   builds the same `Dockerfile`, pushes it to **Google Artifact
-   Registry**, and deploys it to **Cloud Run** with
-   `--allow-unauthenticated`, so the resulting URL is publicly
-   reachable. Authenticates via Workload Identity Federation - GitHub
-   mints a short-lived OIDC token for the run, which Google exchanges
-   for credentials scoped to one service account. No long-lived JSON
-   key is stored anywhere. See "Deploying to Cloud Run" below for the
-   one-time GCP setup this requires.
-
-### Deploying to Cloud Run
-
-The `deploy` job needs three repository secrets and a one-time GCP
-setup (a project, an Artifact Registry repo, a service account, and a
-Workload Identity Federation provider trusting this specific repo).
-Run once, from a machine with `gcloud` installed and logged in
-(`gcloud auth login`), or from Cloud Shell in the GCP Console:
-
-```bash
-PROJECT_ID="your-gcp-project-id"     # existing project, billing enabled
-REPO="owner/game-of-life"            # this GitHub repo, owner/name
-REGION="europe-west10"
-
-gcloud config set project "$PROJECT_ID"
-gcloud services enable run.googleapis.com artifactregistry.googleapis.com \
-  iamcredentials.googleapis.com
-
-# Where built images live
-gcloud artifacts repositories create game-of-life \
-  --repository-format=docker --location="$REGION"
-
-# The identity GitHub Actions deploys as
-gcloud iam service-accounts create gha-deployer \
-  --display-name="GitHub Actions Deployer"
-SA="gha-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
-
-for role in roles/artifactregistry.writer roles/run.admin roles/iam.serviceAccountUser; do
-  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-    --member="serviceAccount:${SA}" --role="$role"
-done
-
-# Trust GitHub's OIDC tokens, but only for this repo
-gcloud iam workload-identity-pools create github-pool --location=global
-gcloud iam workload-identity-pools providers create-oidc github-provider \
-  --location=global --workload-identity-pool=github-pool \
-  --issuer-uri="https://token.actions.githubusercontent.com" \
-  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
-  --attribute-condition="assertion.repository=='${REPO}'"
-
-PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
-gcloud iam service-accounts add-iam-policy-binding "$SA" \
-  --role=roles/iam.workloadIdentityUser \
-  --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-pool/attribute.repository/${REPO}"
-
-echo "GCP_PROJECT_ID=${PROJECT_ID}"
-echo "GCP_SERVICE_ACCOUNT=${SA}"
-echo "GCP_WORKLOAD_IDENTITY_PROVIDER=projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
-```
-
-Then set those three values as repository secrets (Settings -> Secrets
-and variables -> Actions), or via the CLI:
-
-```bash
-gh secret set GCP_PROJECT_ID --body "your-gcp-project-id"
-gh secret set GCP_SERVICE_ACCOUNT --body "gha-deployer@your-gcp-project-id.iam.gserviceaccount.com"
-gh secret set GCP_WORKLOAD_IDENTITY_PROVIDER --body "projects/.../providers/github-provider"
-```
-
-Push to `main` and the `deploy` job will build, push, and deploy; the
-service URL shows up as the environment URL on the run's summary page
-(and via `gcloud run services describe game-of-life --region europe-west10 --format='value(status.url)'`).
-
-Cloud Run's free tier covers a low-traffic hobby app like this
-(scales to zero when idle, so the first request after a quiet period
-has a brief cold start).
+Nothing in this pipeline deploys the image anywhere - it's built,
+tested, and published to GHCR, and stops there. `docker run` it
+locally, or point a deploy step at the published image later if you
+want it live somewhere.
